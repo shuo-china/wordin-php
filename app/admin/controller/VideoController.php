@@ -4,6 +4,7 @@ namespace app\admin\controller;
 
 use Throwable;
 use app\admin\logic\IFlyTekLogic;
+use app\admin\model\File;
 use app\admin\model\Video;
 use app\admin\model\VideoSentence;
 
@@ -58,10 +59,40 @@ class VideoController extends BaseController
 
     public function delete()
     {
-        $id = $this->request->param('id');
-        Video::where('id', $id)->delete();
+        $id = (int) $this->request->param('id');
+        if ($id <= 0) {
+            $this->error(400, 'Video ID is required.', 'VIDEO_ID_REQUIRED');
+        }
+
+        $video = Video::with(['file'])->where('id', $id)->find();
+        if (!$video) {
+            $this->success(204);
+        }
+
+        $file = $video->file;
+
+        VideoSentence::where('video_id', $video->id)->delete();
+        $video->delete();
+
+        if ($file) {
+            $this->deletePhysicalFile($file->getData('path'));
+            File::where('key', $file->key)->delete();
+        }
 
         $this->success(204);
+    }
+
+    protected function deletePhysicalFile($path)
+    {
+        $path = trim((string) $path);
+        if ($path === '' || preg_match('/^https?:\/\//', $path) === 1) {
+            return;
+        }
+
+        $filename = public_path() . $path;
+        if (is_file($filename)) {
+            @unlink($filename);
+        }
     }
 
     public function analyze()
