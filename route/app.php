@@ -38,4 +38,5 @@ Route::group('admin', function () {
 
 Route::group('portal', function () {
     Route::rule('callback/iFlyTekNotify', 'portal/callback/iFlyTekNotify', 'GET|POST');
+    Route::rule('callback/iflytek-notify', 'portal/callback/iFlyTekNotify', 'GET|POST');
 });

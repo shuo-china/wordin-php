@@ -81,11 +81,14 @@ class VideoController extends BaseController
             $this->error(400, 'Video file not found.', 'VIDEO_FILE_NOT_FOUND');
         }
 
+        $audioUrl = $this->buildPublicUrl($video->file->getData('path'));
+        $callbackUrl = $this->buildIFlyTekCallbackUrl();
+
         try {
-            $result = (new IFlyTekLogic())->createUrlLinkTask($this->buildPublicUrl($video->file->getData('path')), [
+            $result = (new IFlyTekLogic())->createUrlLinkTask($audioUrl, [
                 'fileName' => $video->file->name,
                 'requestTimeout' => $this->getAnalyzeRequestTimeout(),
-                'callbackUrl' => $this->buildIFlyTekCallbackUrl(),
+                'callbackUrl' => $callbackUrl,
             ]);
         } catch (Throwable $e) {
             $this->error(500, $e->getMessage(), 'XFYUN_ANALYZE_FAILED');
@@ -103,6 +106,8 @@ class VideoController extends BaseController
             'message' => 'success',
             'orderId' => $result['orderId'],
             'taskEstimateTime' => $result['taskEstimateTime'] ?? null,
+            'audioUrl' => $audioUrl,
+            'callbackUrl' => $callbackUrl,
         ]);
     }
 
