@@ -226,12 +226,7 @@ class IFlyTekLogic
 
     private function parseOrderResult($orderResult)
     {
-        if (is_array($orderResult)) {
-            $data = $orderResult;
-        } else {
-            $data = json_decode((string) $orderResult, true);
-        }
-
+        $data = $this->decodeJsonValue($orderResult);
         if (!isset($data['lattice']) || !is_array($data['lattice'])) {
             return [];
         }
@@ -243,7 +238,7 @@ class IFlyTekLogic
                 continue;
             }
 
-            $oneBest = json_decode($item['json_1best'], true);
+            $oneBest = $this->decodeJsonValue($item['json_1best']);
             if (!isset($oneBest['st']) || !is_array($oneBest['st'])) {
                 continue;
             }
@@ -266,6 +261,21 @@ class IFlyTekLogic
         }
 
         return $segments;
+    }
+
+    private function decodeJsonValue($value)
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $data = json_decode($value, true);
+
+        return is_array($data) ? $data : [];
     }
 
     private function translateSegmentsSafely(array $segments, $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT)
