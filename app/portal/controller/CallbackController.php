@@ -41,6 +41,10 @@ class CallbackController extends BaseController
 
         $status = (string) $this->getNotifyParam('status', '');
         if ($status === '-1') {
+            $video->save([
+                'analyze_status' => 'failed',
+            ]);
+
             $this->writeNotifyLog('transfer failed', [
                 'videoId' => $video->id,
                 'orderId' => $orderId,
@@ -79,7 +83,14 @@ class CallbackController extends BaseController
             ]);
 
             $sentenceCount = (new VideoSentenceLogic())->replace($video->id, $result['segments'] ?? []);
+            $video->save([
+                'analyze_status' => 'success',
+            ]);
         } catch (Throwable $e) {
+            $video->save([
+                'analyze_status' => 'failed',
+            ]);
+
             $this->writeNotifyLog('failed', [
                 'videoId' => $video->id,
                 'orderId' => $orderId,

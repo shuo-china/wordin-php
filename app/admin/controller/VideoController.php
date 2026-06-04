@@ -112,8 +112,16 @@ class VideoController extends BaseController
             $this->error(400, 'Video file not found.', 'VIDEO_FILE_NOT_FOUND');
         }
 
+        if ($video->analyze_status === 'analyzing') {
+            $this->error(409, 'Video is analyzing.', 'VIDEO_ANALYZING');
+        }
+
         $audioUrl = $this->buildPublicUrl($video->file->getData('path'));
         $callbackUrl = $this->buildIFlyTekCallbackUrl();
+
+        $video->save([
+            'analyze_status' => 'analyzing',
+        ]);
 
         try {
             $result = (new IFlyTekLogic())->createUrlLinkTask($audioUrl, [
@@ -122,15 +130,24 @@ class VideoController extends BaseController
                 'callbackUrl' => $callbackUrl,
             ]);
         } catch (Throwable $e) {
+            $video->save([
+                'analyze_status' => 'failed',
+            ]);
+
             $this->error(500, $e->getMessage(), 'XFYUN_ANALYZE_FAILED');
         }
 
         if (empty($result['orderId'])) {
+            $video->save([
+                'analyze_status' => 'failed',
+            ]);
+
             $this->error(500, 'Xfyun upload API did not return orderId.', 'XFYUN_ORDER_ID_MISSING');
         }
 
         $video->save([
             'order_id' => $result['orderId'],
+            'analyze_status' => 'analyzing',
         ]);
 
         $this->success(202, [
