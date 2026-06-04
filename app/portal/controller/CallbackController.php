@@ -123,7 +123,18 @@ class CallbackController extends BaseController
         $message = 'Xfyun notify ' . $event . ': ' . json_encode($data, JSON_UNESCAPED_UNICODE);
         Log::write($message, 'info');
 
-        $file = $this->app->getRuntimePath() . 'iflytek_notify.log';
-        file_put_contents($file, '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL, FILE_APPEND | LOCK_EX);
+        try {
+            $file = $this->app->getRuntimePath() . 'iflytek_notify.log';
+            $dir = dirname($file);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+
+            if (is_dir($dir) && is_writable($dir)) {
+                file_put_contents($file, '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL, FILE_APPEND | LOCK_EX);
+            }
+        } catch (Throwable $e) {
+            Log::write('Xfyun notify file log failed: ' . $e->getMessage(), 'error');
+        }
     }
 }
