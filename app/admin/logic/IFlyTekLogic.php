@@ -82,7 +82,7 @@ class IFlyTekLogic
         $transferSegments = $this->parseOrderResult($transferContent['orderResult'] ?? '');
 
         if (!empty($transferSegments) && $this->isCompletedOrderInfo($orderInfo)) {
-            $transferSegments = $this->translateSegments($transferSegments, $requestTimeout);
+            $transferSegments = $this->translateSegmentsSafely($transferSegments, $requestTimeout);
         }
 
         return [
@@ -226,7 +226,12 @@ class IFlyTekLogic
 
     private function parseOrderResult($orderResult)
     {
-        $data = json_decode((string) $orderResult, true);
+        if (is_array($orderResult)) {
+            $data = $orderResult;
+        } else {
+            $data = json_decode((string) $orderResult, true);
+        }
+
         if (!isset($data['lattice']) || !is_array($data['lattice'])) {
             return [];
         }
@@ -263,7 +268,7 @@ class IFlyTekLogic
         return $segments;
     }
 
-    private function translateSegments(array $segments, $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT)
+    private function translateSegmentsSafely(array $segments, $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT)
     {
         foreach ($segments as $index => $segment) {
             $text = trim((string) ($segment['text'] ?? ''));
@@ -272,7 +277,12 @@ class IFlyTekLogic
                 continue;
             }
 
-            $segments[$index]['translateText'] = $this->translateText($text, $requestTimeout);
+            try {
+                $segments[$index]['translateText'] = $this->translateText($text, $requestTimeout);
+            } catch (RuntimeException $e) {
+                $segments[$index]['translateText'] = '';
+                $segments[$index]['translateError'] = $e->getMessage();
+            }
         }
 
         return $segments;

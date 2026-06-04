@@ -12,30 +12,54 @@ class CallbackController extends BaseController
 {
     public function iFlyTekNotify()
     {
-        Log::info('Xfyun notify received: ' . json_encode([
+        $this->writeNotifyLog('received', [
             'method' => $this->request->method(),
             'ip' => $this->request->ip(),
             'param' => $this->request->param(),
             'input' => $this->request->getInput(),
-        ], JSON_UNESCAPED_UNICODE));
+        ]);
 
         $orderId = $this->getNotifyParam('orderId', $this->getNotifyParam('OrderId', ''));
         $orderId = trim((string) $orderId);
         if ($orderId === '') {
+            $this->writeNotifyLog('missing orderId', [
+                'param' => $this->request->param(),
+                'input' => $this->request->getInput(),
+            ]);
+
             $this->error(400, 'orderId is required.', 'XFYUN_ORDER_ID_REQUIRED');
         }
 
         $video = Video::where('order_id', $orderId)->find();
         if (!$video) {
+            $this->writeNotifyLog('video not found', [
+                'orderId' => $orderId,
+            ]);
+
             $this->error(404, 'Video not found by orderId.', 'VIDEO_NOT_FOUND');
         }
 
         $status = (string) $this->getNotifyParam('status', '');
-        if ($status !== '1') {
-            Log::info('Xfyun notify ignored: ' . json_encode([
+        if ($status === '-1') {
+            $this->writeNotifyLog('transfer failed', [
+                'videoId' => $video->id,
                 'orderId' => $orderId,
                 'status' => $status,
-            ], JSON_UNESCAPED_UNICODE));
+            ]);
+
+            $this->success(200, [
+                'message' => 'transfer failed',
+                'orderId' => $orderId,
+                'status' => $status,
+            ]);
+        }
+
+        if ($status !== '1') {
+            $this->writeNotifyLog('ignored', [
+                'videoId' => $video->id,
+                'orderId' => $orderId,
+                'status' => $status,
+            ]);
 
             $this->success(200, [
                 'message' => 'ignored',
@@ -46,10 +70,30 @@ class CallbackController extends BaseController
 
         try {
             $result = (new IFlyTekLogic())->getResult($orderId);
+            $this->writeNotifyLog('result fetched', [
+                'videoId' => $video->id,
+                'orderId' => $orderId,
+                'status' => $result['status'] ?? null,
+                'failType' => $result['failType'] ?? null,
+                'segmentCount' => count($result['segments'] ?? []),
+            ]);
+
             $sentenceCount = (new VideoSentenceLogic())->replace($video->id, $result['segments'] ?? []);
         } catch (Throwable $e) {
+            $this->writeNotifyLog('failed', [
+                'videoId' => $video->id,
+                'orderId' => $orderId,
+                'message' => $e->getMessage(),
+            ]);
+
             $this->error(500, $e->getMessage(), 'XFYUN_NOTIFY_FAILED');
         }
+
+        $this->writeNotifyLog('success', [
+            'videoId' => $video->id,
+            'orderId' => $orderId,
+            'sentenceCount' => $sentenceCount,
+        ]);
 
         $this->success(200, [
             'message' => 'success',
@@ -72,5 +116,14 @@ class CallbackController extends BaseController
         }
 
         return $default;
+    }
+
+    protected function writeNotifyLog($event, array $data)
+    {
+        $message = 'Xfyun notify ' . $event . ': ' . json_encode($data, JSON_UNESCAPED_UNICODE);
+        Log::write($message, 'info');
+
+        $file = $this->app->getRuntimePath() . 'iflytek_notify.log';
+        file_put_contents($file, '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 }
