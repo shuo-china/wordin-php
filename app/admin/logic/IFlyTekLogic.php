@@ -6,9 +6,6 @@ use RuntimeException;
 
 class IFlyTekLogic
 {
-    private const XFYUN_APP_ID = 'd4cc905d';
-    private const XFYUN_API_SECRET = 'OGNlZDNkMDNiMmVlNjFmMjBlNDM0MmNj';
-    private const XFYUN_API_KEY = 'e1d0574934c4b6b5597472ac4ef2c6fe';
     private const ASR_API_HOST = 'https://office-api-ist-dx.iflyaisol.com';
     private const TRANSLATE_API_HOST = 'https://ntrans.xfyun.cn';
     private const TRANSLATE_API_PATH = '/v2/ots';
@@ -104,7 +101,7 @@ class IFlyTekLogic
 
     private function requestUpload(array $params, $requestTimeout)
     {
-        $url = self::ASR_API_HOST . '/v2/upload?' . $this->buildQuery($params);
+        $url = $this->asrApiHost() . '/v2/upload?' . $this->buildQuery($params);
 
         return $this->post($url, [
             CURLOPT_HTTPHEADER => [
@@ -127,7 +124,7 @@ class IFlyTekLogic
             $params['signatureRandom'] = (string) $signatureRandom;
         }
 
-        $url = self::ASR_API_HOST . '/v2/getResult?' . $this->buildQuery($params);
+        $url = $this->asrApiHost() . '/v2/getResult?' . $this->buildQuery($params);
 
         return $this->post($url, [
             CURLOPT_HTTPHEADER => [
@@ -159,8 +156,8 @@ class IFlyTekLogic
     private function buildAuthParams()
     {
         return [
-            'appId' => self::XFYUN_APP_ID,
-            'accessKeyId' => self::XFYUN_API_KEY,
+            'appId' => $this->appId(),
+            'accessKeyId' => $this->apiKey(),
             'dateTime' => date('Y-m-d\TH:i:sO'),
             'signatureRandom' => $this->randomString(16),
         ];
@@ -180,7 +177,7 @@ class IFlyTekLogic
             $pairs[] = urlencode((string) $key) . '=' . urlencode((string) $value);
         }
 
-        return base64_encode(hash_hmac('sha1', implode('&', $pairs), self::XFYUN_API_SECRET, true));
+        return base64_encode(hash_hmac('sha1', implode('&', $pairs), $this->apiSecret(), true));
     }
 
     private function buildQuery(array $params)
@@ -285,7 +282,7 @@ class IFlyTekLogic
     {
         $body = json_encode([
             'common' => [
-                'app_id' => self::XFYUN_APP_ID,
+                'app_id' => $this->appId(),
             ],
             'business' => [
                 'from' => 'en',
@@ -300,7 +297,7 @@ class IFlyTekLogic
             throw new RuntimeException('Failed to encode Xfyun translate request.');
         }
 
-        $result = $this->post(self::TRANSLATE_API_HOST . self::TRANSLATE_API_PATH, [
+        $result = $this->post($this->translateApiHost() . $this->translateApiPath(), [
             CURLOPT_HTTPHEADER => $this->buildTranslateHeaders($body),
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_TIMEOUT => $requestTimeout,
@@ -315,17 +312,17 @@ class IFlyTekLogic
 
     private function buildTranslateHeaders($body)
     {
-        $host = parse_url(self::TRANSLATE_API_HOST, PHP_URL_HOST);
+        $host = parse_url($this->translateApiHost(), PHP_URL_HOST);
         $date = gmdate('D, d M Y H:i:s') . ' GMT';
         $digest = 'SHA-256=' . base64_encode(hash('sha256', $body, true));
         $signatureString = "host: {$host}\n";
         $signatureString .= "date: {$date}\n";
-        $signatureString .= 'POST ' . self::TRANSLATE_API_PATH . " HTTP/1.1\n";
+        $signatureString .= 'POST ' . $this->translateApiPath() . " HTTP/1.1\n";
         $signatureString .= "digest: {$digest}";
-        $signature = base64_encode(hash_hmac('sha256', $signatureString, self::XFYUN_API_SECRET, true));
+        $signature = base64_encode(hash_hmac('sha256', $signatureString, $this->apiSecret(), true));
         $authorization = sprintf(
             'api_key="%s", algorithm="hmac-sha256", headers="host date request-line digest", signature="%s"',
-            self::XFYUN_API_KEY,
+            $this->apiKey(),
             $signature
         );
 
@@ -440,6 +437,46 @@ class IFlyTekLogic
 
         for ($i = 0; $i < $length; $i++) {
             $value .= $pool[random_int(0, $max)];
+        }
+
+        return $value;
+    }
+
+    private function appId()
+    {
+        return $this->requiredEnv('xfyun.app_id', 'XFYUN_APP_ID');
+    }
+
+    private function apiKey()
+    {
+        return $this->requiredEnv('xfyun.api_key', 'XFYUN_API_KEY');
+    }
+
+    private function apiSecret()
+    {
+        return $this->requiredEnv('xfyun.api_secret', 'XFYUN_API_SECRET');
+    }
+
+    private function asrApiHost()
+    {
+        return self::ASR_API_HOST;
+    }
+
+    private function translateApiHost()
+    {
+        return self::TRANSLATE_API_HOST;
+    }
+
+    private function translateApiPath()
+    {
+        return self::TRANSLATE_API_PATH;
+    }
+
+    private function requiredEnv($name, $label)
+    {
+        $value = trim((string) env($name, ''));
+        if ($value === '') {
+            throw new RuntimeException($label . ' is not configured.');
         }
 
         return $value;
